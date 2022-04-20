@@ -402,8 +402,10 @@ if __name__ == '__main__':
 
         # Send request
         try:
-            for inputs, outputs, model_name, model_version in requestGenerator(
-                    batched_image_data, input_name, output_name, dtype, FLAGS):
+            pass_start_time = time()
+            requests=requestGenerator(
+                    batched_image_data, input_name, output_name, dtype, FLAGS)
+            for inputs, outputs, model_name, model_version in requests:
                 sent_count += 1
                 if FLAGS.streaming:
                     triton_client.async_stream_infer(
@@ -436,7 +438,8 @@ if __name__ == '__main__':
                                             request_id=str(sent_count),
                                             model_version=FLAGS.model_version,
                                             outputs=outputs))
-
+            pass_end_time = time()
+            throughput = float(len(requests)) / (pass_end_time - pass_start_time)
         except InferenceServerException as e:
             print("inference failed: " + str(e))
             if FLAGS.streaming:
