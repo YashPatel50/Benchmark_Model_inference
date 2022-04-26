@@ -453,6 +453,7 @@ if __name__ == '__main__':
             with file:
                 write = csv.writer(file)
                 write.writerows(per_batch_throughput)
+            file.close()
         except InferenceServerException as e:
             print("inference failed: " + str(e))
             if FLAGS.streaming:
