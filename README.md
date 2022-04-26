@@ -31,3 +31,10 @@ You are free to select instances with more than 1 NVIDIA GPU.
 Now once we have our EC2 instance up and running we will proceed to pull Triton Inference server container in our instance using docker with the following command.
 
 **$ docker pull nvcr.io/nvidia/tritonserver:22.03-tf2-python-py3**
+
+sudo docker run --rm -p8000:8000 -p8001:8001 -p8002:8002 nvcr.io/nvidia/tritonserver:22.03-py3 tritonserver --model-repository=
+s3://modelsyppatel/model_repository
+
+Get Client Libraries
+docker run -it --rm --net=host nvcr.io/nvidia/tritonserver:22.03-py3-sdk
+/workspace/install/bin/image_client -m inception_graphdef -c 3 -s INCEPTION /workspace/images/mug.jpg
