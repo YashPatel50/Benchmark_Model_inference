@@ -29,6 +29,7 @@ import argparse
 from functools import partial
 import os
 import sys
+import time
 
 from PIL import Image
 import numpy as np
@@ -402,11 +403,12 @@ if __name__ == '__main__':
 
         # Send request
         try:
-            pass_start_time = time()
-            requests=requestGenerator(
-                    batched_image_data, input_name, output_name, dtype, FLAGS)
-            for inputs, outputs, model_name, model_version in requests:
+            per_batch_throughput=[]
+            overall_start_time = time.time()
+            for inputs, outputs, model_name, model_version in requestGenerator(
+                    batched_image_data, input_name, output_name, dtype, FLAGS):
                 sent_count += 1
+                batch_start_time=time.time()
                 if FLAGS.streaming:
                     triton_client.async_stream_infer(
                         FLAGS.model_name,
@@ -438,8 +440,19 @@ if __name__ == '__main__':
                                             request_id=str(sent_count),
                                             model_version=FLAGS.model_version,
                                             outputs=outputs))
-            pass_end_time = time()
-            throughput = float(len(requests)) / (pass_end_time - pass_start_time)
+                batch_end_time=time.time()
+                per_batch_throughput.append(round(float(FLAGS.batch_size)/(batch_end_time-batch_start_time), 5))
+            overall_end_time = time.time()
+            per_batch_throughput.append("Total throughput"+str(round(float(len(per_batch_throughput))/(overall_end_time-overall_start_time),5)))
+            import csv
+
+            # opening the csv file in 'w+' mode
+            file = open('Throughput_Results.csv', 'w+', newline='')
+
+            # writing the data into the file
+            with file:
+                write = csv.writer(file)
+                write.writerows(per_batch_throughput)
         except InferenceServerException as e:
             print("inference failed: " + str(e))
             if FLAGS.streaming:
