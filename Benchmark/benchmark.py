@@ -368,6 +368,8 @@ if __name__ == '__main__':
 
     image_data = []
     for filename in filenames:
+        if (filename == 'images/'):
+            continue
         file_byte_string = s3.get_object(Bucket=BUCKET, Key=filename)['Body'].read()
         img = Image.open(BytesIO(file_byte_string))
         image_data.append(
