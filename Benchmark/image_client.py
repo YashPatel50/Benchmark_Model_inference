@@ -342,150 +342,173 @@ if __name__ == '__main__':
 
     max_batch_size, input_name, output_name, c, h, w, format, dtype = parse_model(
         model_metadata, model_config)
-
+    """
+        filenames = []
+        if os.path.isdir(FLAGS.image_filename):
+            filenames = [
+                os.path.join(FLAGS.image_filename, f)
+                for f in os.listdir(FLAGS.image_filename)
+                if os.path.isfile(os.path.join(FLAGS.image_filename, f))
+            ]
+        else:
+            filenames = [
+                FLAGS.image_filename,
+            ]
+    
+        filenames.sort()
+    
+        # Preprocess the images into input data according to model
+        # requirements
+        image_data = []
+        for filename in filenames:
+            img = Image.open(filename)
+            image_data.append(
+                preprocess(img, format, dtype, c, h, w, FLAGS.scaling,
+                           FLAGS.protocol.lower()))
+    """
+    from PIL import Image
+    from io import BytesIO
+    import boto3
     filenames = []
-    if os.path.isdir(FLAGS.image_filename):
-        filenames = [
-            os.path.join(FLAGS.image_filename, f)
-            for f in os.listdir(FLAGS.image_filename)
-            if os.path.isfile(os.path.join(FLAGS.image_filename, f))
-        ]
-    else:
-        filenames = [
-            FLAGS.image_filename,
-        ]
+    BUCKET = FLAGS.image_filename
+    FOLDER = 'images/'
 
-    filenames.sort()
+    s3 = boto3.client('s3')
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=BUCKET, Prefix=FOLDER)
+    for page in pages:
+        for obj in page['Contents']:
+            filenames.append(obj["Key"])
 
-    # Preprocess the images into input data according to model
-    # requirements
+
+
     image_data = []
     for filename in filenames:
-        img = Image.open(filename)
+        file_byte_string = s3.get_object(Bucket=BUCKET, Key=filename)['Body'].read()
+        img = Image.open(BytesIO(file_byte_string))
         image_data.append(
             preprocess(img, format, dtype, c, h, w, FLAGS.scaling,
                        FLAGS.protocol.lower()))
-
     # Send requests of FLAGS.batch_size images. If the number of
     # images isn't an exact multiple of FLAGS.batch_size then just
     # start over with the first images until the batch is filled.
-    requests = []
-    responses = []
-    result_filenames = []
-    request_ids = []
-    image_idx = 0
-    last_request = False
-    user_data = UserData()
+    per_attempt_time=[]
+    for _ in range(4):
+        requests = []
+        responses = []
+        result_filenames = []
+        request_ids = []
+        image_idx = 0
+        last_request = False
+        user_data = UserData()
 
-    # Holds the handles to the ongoing HTTP async requests.
-    async_requests = []
+        # Holds the handles to the ongoing HTTP async requests.
+        async_requests = []
 
-    sent_count = 0
+        sent_count = 0
 
-    if FLAGS.streaming:
-        triton_client.start_stream(partial(completion_callback, user_data))
+        if FLAGS.streaming:
+            triton_client.start_stream(partial(completion_callback, user_data))
 
-    while not last_request:
-        input_filenames = []
-        repeated_image_data = []
+        while not last_request:
+            input_filenames = []
+            repeated_image_data = []
 
-        for idx in range(FLAGS.batch_size):
-            input_filenames.append(filenames[image_idx])
-            repeated_image_data.append(image_data[image_idx])
-            image_idx = (image_idx + 1) % len(image_data)
-            if image_idx == 0:
-                last_request = True
+            for idx in range(FLAGS.batch_size):
+                input_filenames.append(filenames[image_idx])
+                repeated_image_data.append(image_data[image_idx])
+                image_idx = (image_idx + 1) % len(image_data)
+                if image_idx == 0:
+                    last_request = True
 
-        if max_batch_size > 0:
-            batched_image_data = np.stack(repeated_image_data, axis=0)
-        else:
-            batched_image_data = repeated_image_data[0]
+            if max_batch_size > 0:
+                batched_image_data = np.stack(repeated_image_data, axis=0)
+            else:
+                batched_image_data = repeated_image_data[0]
 
-        # Send request
-        try:
-            per_batch_throughput=[]
-            overall_start_time = time.time()
-            for inputs, outputs, model_name, model_version in requestGenerator(
-                    batched_image_data, input_name, output_name, dtype, FLAGS):
-                sent_count += 1
-                batch_start_time=time.time()
-                if FLAGS.streaming:
-                    triton_client.async_stream_infer(
-                        FLAGS.model_name,
-                        inputs,
-                        request_id=str(sent_count),
-                        model_version=FLAGS.model_version,
-                        outputs=outputs)
-                elif FLAGS.async_set:
-                    if FLAGS.protocol.lower() == "grpc":
-                        triton_client.async_infer(
+            # Send request
+            try:
+                per_batch_time=[]
+                start_time = time.time()
+                for inputs, outputs, model_name, model_version in requestGenerator(
+                        batched_image_data, input_name, output_name, dtype, FLAGS):
+                    sent_count += 1
+                    if FLAGS.streaming:
+                        triton_client.async_stream_infer(
                             FLAGS.model_name,
                             inputs,
-                            partial(completion_callback, user_data),
                             request_id=str(sent_count),
                             model_version=FLAGS.model_version,
                             outputs=outputs)
-                    else:
-                        async_requests.append(
+                    elif FLAGS.async_set:
+                        if FLAGS.protocol.lower() == "grpc":
                             triton_client.async_infer(
                                 FLAGS.model_name,
                                 inputs,
+                                partial(completion_callback, user_data),
                                 request_id=str(sent_count),
                                 model_version=FLAGS.model_version,
-                                outputs=outputs))
-                else:
-                    responses.append(
-                        triton_client.infer(FLAGS.model_name,
-                                            inputs,
-                                            request_id=str(sent_count),
-                                            model_version=FLAGS.model_version,
-                                            outputs=outputs))
-                batch_end_time=time.time()
-                per_batch_throughput.append(round(float(FLAGS.batch_size)/(batch_end_time-batch_start_time), 5))
-            overall_end_time = time.time()
-            per_batch_throughput.append("Total throughput"+str(round(float(len(per_batch_throughput))/(overall_end_time-overall_start_time),5)))
-            import csv
+                                outputs=outputs)
+                        else:
+                            async_requests.append(
+                                triton_client.async_infer(
+                                    FLAGS.model_name,
+                                    inputs,
+                                    request_id=str(sent_count),
+                                    model_version=FLAGS.model_version,
+                                    outputs=outputs))
+                    else:
+                        responses.append(
+                            triton_client.infer(FLAGS.model_name,
+                                                inputs,
+                                                request_id=str(sent_count),
+                                                model_version=FLAGS.model_version,
+                                                outputs=outputs))
+                    batch_end_time=time.time()
+                    per_batch_time.append(round(batch_end_time-start_time, 5))
 
-            # opening the csv file in 'w+' mode
-            file = open('Throughput_Results.csv', 'w+', newline='')
 
-            # writing the data into the file
-            with file:
-                write = csv.writer(file)
-                write.writerows(per_batch_throughput)
-            file.close()
-        except InferenceServerException as e:
-            print("inference failed: " + str(e))
-            if FLAGS.streaming:
-                triton_client.stop_stream()
-            sys.exit(1)
+                per_attempt_time.append(per_batch_time)
 
-    if FLAGS.streaming:
-        triton_client.stop_stream()
+            except InferenceServerException as e:
+                print("inference failed: " + str(e))
+                if FLAGS.streaming:
+                    triton_client.stop_stream()
+                sys.exit(1)
 
-    if FLAGS.protocol.lower() == "grpc":
-        if FLAGS.streaming or FLAGS.async_set:
-            processed_count = 0
-            while processed_count < sent_count:
-                (results, error) = user_data._completed_requests.get()
-                processed_count += 1
-                if error is not None:
-                    print("inference failed: " + str(error))
-                    sys.exit(1)
-                responses.append(results)
-    else:
-        if FLAGS.async_set:
-            # Collect results from the ongoing async requests
-            # for HTTP Async requests.
-            for async_request in async_requests:
-                responses.append(async_request.get_result())
+        if FLAGS.streaming:
+            triton_client.stop_stream()
 
-    for response in responses:
         if FLAGS.protocol.lower() == "grpc":
-            this_id = response.get_response().id
+            if FLAGS.streaming or FLAGS.async_set:
+                processed_count = 0
+                while processed_count < sent_count:
+                    (results, error) = user_data._completed_requests.get()
+                    processed_count += 1
+                    if error is not None:
+                        print("inference failed: " + str(error))
+                        sys.exit(1)
+                    responses.append(results)
         else:
-            this_id = response.get_response()["id"]
-        print("Request {}, batch size {}".format(this_id, FLAGS.batch_size))
-        postprocess(response, output_name, FLAGS.batch_size, max_batch_size > 0)
+            if FLAGS.async_set:
+                # Collect results from the ongoing async requests
+                # for HTTP Async requests.
+                for async_request in async_requests:
+                    responses.append(async_request.get_result())
 
-    print("PASS")
+        for response in responses:
+            if FLAGS.protocol.lower() == "grpc":
+                this_id = response.get_response().id
+            else:
+                this_id = response.get_response()["id"]
+            print("Request {}, batch size {}".format(this_id, FLAGS.batch_size))
+            postprocess(response, output_name, FLAGS.batch_size, max_batch_size > 0)
+
+        print("PASS")
+    file = open('Throughput_Results.csv', 'w+', newline='')
+    import csv
+    # writing the data into the file
+    with file:
+        write = csv.writer(file)
+        write.writerows(per_attempt_time)
+    file.close()
