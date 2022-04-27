@@ -369,6 +369,11 @@ if __name__ == '__main__':
     from PIL import Image
     from io import BytesIO
     import boto3
+    import os
+    os.environ["AWS_DEFAULT_REGION"] = 'us-east-1'
+    os.environ["AWS_ACCESS_KEY_ID"] = 'AKIA52QUT77PDFHDKUXW'
+    os.environ["AWS_SECRET_ACCESS_KEY"] = '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'
+
     filenames = []
     BUCKET = FLAGS.image_filename
     FOLDER = 'images/'
