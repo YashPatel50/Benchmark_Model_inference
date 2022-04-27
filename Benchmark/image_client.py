@@ -342,30 +342,53 @@ if __name__ == '__main__':
 
     max_batch_size, input_name, output_name, c, h, w, format, dtype = parse_model(
         model_metadata, model_config)
-
+    """
+        filenames = []
+        if os.path.isdir(FLAGS.image_filename):
+            filenames = [
+                os.path.join(FLAGS.image_filename, f)
+                for f in os.listdir(FLAGS.image_filename)
+                if os.path.isfile(os.path.join(FLAGS.image_filename, f))
+            ]
+        else:
+            filenames = [
+                FLAGS.image_filename,
+            ]
+    
+        filenames.sort()
+    
+        # Preprocess the images into input data according to model
+        # requirements
+        image_data = []
+        for filename in filenames:
+            img = Image.open(filename)
+            image_data.append(
+                preprocess(img, format, dtype, c, h, w, FLAGS.scaling,
+                           FLAGS.protocol.lower()))
+    """
+    from PIL import Image
+    from io import BytesIO
+    import boto3
     filenames = []
-    if os.path.isdir(FLAGS.image_filename):
-        filenames = [
-            os.path.join(FLAGS.image_filename, f)
-            for f in os.listdir(FLAGS.image_filename)
-            if os.path.isfile(os.path.join(FLAGS.image_filename, f))
-        ]
-    else:
-        filenames = [
-            FLAGS.image_filename,
-        ]
+    BUCKET = FLAGS.image_filename
+    FOLDER = 'images/'
 
-    filenames.sort()
+    s3 = boto3.client('s3')
+    paginator = s3.get_paginator('list_objects_v2')
+    pages = paginator.paginate(Bucket=BUCKET, Prefix=FOLDER)
+    for page in pages:
+        for obj in page['Contents']:
+            filenames.append(obj["Key"])
 
-    # Preprocess the images into input data according to model
-    # requirements
+
+
     image_data = []
     for filename in filenames:
-        img = Image.open(filename)
+        file_byte_string = s3.get_object(Bucket=BUCKET, Key=filename)['Body'].read()
+        img = Image.open(BytesIO(file_byte_string))
         image_data.append(
             preprocess(img, format, dtype, c, h, w, FLAGS.scaling,
                        FLAGS.protocol.lower()))
-
     # Send requests of FLAGS.batch_size images. If the number of
     # images isn't an exact multiple of FLAGS.batch_size then just
     # start over with the first images until the batch is filled.
