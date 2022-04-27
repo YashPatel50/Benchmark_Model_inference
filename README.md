@@ -42,3 +42,7 @@ Get Client Libraries
 docker pull nvcr.io/nvidia/tritonserver:22.03-py3-sdk
 docker run -it --rm --net=host nvcr.io/nvidia/tritonserver:22.03-py3-sdk
 /workspace/install/bin/image_client -m inception_graphdef -c 3 -s INCEPTION /workspace/images/mug.jpg
+
+S3 Access Key
+AKIA52QUT77PDFHDKUXW
+A6wswMDb9tC/mDlsQkP5OrhxGSTz4uA3R6pB1tbg
