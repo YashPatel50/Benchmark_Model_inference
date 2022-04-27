@@ -503,19 +503,12 @@ if __name__ == '__main__':
                 for async_request in async_requests:
                     responses.append(async_request.get_result())
 
-        for response in responses:
-            if FLAGS.protocol.lower() == "grpc":
-                this_id = response.get_response().id
-            else:
-                this_id = response.get_response()["id"]
-            print("Request {}, batch size {}".format(this_id, FLAGS.batch_size))
-            postprocess(response, output_name, FLAGS.batch_size, max_batch_size > 0)
+
 
         print("PASS")
-    file = open(FLAGS.model_name+'_Results.csv', 'w+', newline='')
-    import csv
-    # writing the data into the file
-    with file:
-        write = csv.writer(file)
-        write.writerows(per_attempt_time)
-    file.close()
+    file = open(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Results.csv', 'w+', newline='')
+
+    import pandas as pd
+
+    df = pd.DataFrame(per_attempt_time)
+    df.to_csv('file2.csv', index=False, header=False)
