@@ -342,30 +342,8 @@ if __name__ == '__main__':
 
     max_batch_size, input_name, output_name, c, h, w, format, dtype = parse_model(
         model_metadata, model_config)
-    """
-        filenames = []
-        if os.path.isdir(FLAGS.image_filename):
-            filenames = [
-                os.path.join(FLAGS.image_filename, f)
-                for f in os.listdir(FLAGS.image_filename)
-                if os.path.isfile(os.path.join(FLAGS.image_filename, f))
-            ]
-        else:
-            filenames = [
-                FLAGS.image_filename,
-            ]
-    
-        filenames.sort()
-    
-        # Preprocess the images into input data according to model
-        # requirements
-        image_data = []
-        for filename in filenames:
-            img = Image.open(filename)
-            image_data.append(
-                preprocess(img, format, dtype, c, h, w, FLAGS.scaling,
-                           FLAGS.protocol.lower()))
-    """
+
+
     from PIL import Image
     from io import BytesIO
     import boto3
@@ -376,7 +354,8 @@ if __name__ == '__main__':
 
     filenames = []
     BUCKET = FLAGS.image_filename
-    FOLDER = 'images/'
+    # FOLDER = 'images/'
+    FOLDER = 'images-testing/'
 
     s3 = boto3.client('s3')
     paginator = s3.get_paginator('list_objects_v2')
@@ -416,6 +395,9 @@ if __name__ == '__main__':
         if FLAGS.streaming:
             triton_client.start_stream(partial(completion_callback, user_data))
 
+        per_batch_time = []
+        start_time = time.time()
+
         while not last_request:
             input_filenames = []
             repeated_image_data = []
@@ -434,12 +416,9 @@ if __name__ == '__main__':
 
             # Send request
             try:
-                per_batch_time=[]
-                start_time = time.time()
                 for inputs, outputs, model_name, model_version in requestGenerator(
                         batched_image_data, input_name, output_name, dtype, FLAGS):
                     sent_count += 1
-                    print("Infering Batch-",sent_count)
                     if FLAGS.streaming:
                         triton_client.async_stream_infer(
                             FLAGS.model_name,
@@ -474,9 +453,6 @@ if __name__ == '__main__':
                     batch_end_time=time.time()
                     per_batch_time.append(round(batch_end_time-start_time, 5))
 
-
-                per_attempt_time.append(per_batch_time)
-
             except InferenceServerException as e:
                 print("inference failed: " + str(e))
                 if FLAGS.streaming:
@@ -503,8 +479,7 @@ if __name__ == '__main__':
                 for async_request in async_requests:
                     responses.append(async_request.get_result())
 
-
-
+        per_attempt_time.append(per_batch_time)
         print("PASS")
 
     import pandas as pd
