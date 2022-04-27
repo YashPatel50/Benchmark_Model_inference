@@ -399,7 +399,7 @@ if __name__ == '__main__':
     # start over with the first images until the batch is filled.
     per_attempt_time=[]
     for i in range(4):
-        print("Attempt-",i)
+        print("Attempt-",i+1)
         requests = []
         responses = []
         result_filenames = []
@@ -506,9 +506,8 @@ if __name__ == '__main__':
 
 
         print("PASS")
-    file = open(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Results.csv', 'w+', newline='')
 
     import pandas as pd
 
     df = pd.DataFrame(per_attempt_time)
-    df.to_csv('file2.csv', index=False, header=False)
+    df.to_csv(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Results.csv', index=False, header=False)
