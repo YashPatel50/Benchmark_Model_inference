@@ -393,7 +393,8 @@ if __name__ == '__main__':
     # images isn't an exact multiple of FLAGS.batch_size then just
     # start over with the first images until the batch is filled.
     per_attempt_time=[]
-    for _ in range(4):
+    for i in range(4):
+        print("Attempt-",i)
         requests = []
         responses = []
         result_filenames = []
@@ -433,6 +434,7 @@ if __name__ == '__main__':
                 for inputs, outputs, model_name, model_version in requestGenerator(
                         batched_image_data, input_name, output_name, dtype, FLAGS):
                     sent_count += 1
+                    print("Infering Batch-",sent_count)
                     if FLAGS.streaming:
                         triton_client.async_stream_infer(
                             FLAGS.model_name,
@@ -505,7 +507,7 @@ if __name__ == '__main__':
             postprocess(response, output_name, FLAGS.batch_size, max_batch_size > 0)
 
         print("PASS")
-    file = open('Throughput_Results.csv', 'w+', newline='')
+    file = open(FLAGS.model_name+'_Results.csv', 'w+', newline='')
     import csv
     # writing the data into the file
     with file:
