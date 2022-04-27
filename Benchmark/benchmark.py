@@ -416,6 +416,9 @@ if __name__ == '__main__':
 
             if max_batch_size > 0:
                 batched_image_data = np.stack(repeated_image_data, axis=0)
+                if model_name == 'googlenet':
+                    print("Made it here")
+                    # batched_image_data = batched_image_data.reshape()
             else:
                 batched_image_data = repeated_image_data[0]
 
