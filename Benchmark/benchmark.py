@@ -354,8 +354,8 @@ if __name__ == '__main__':
 
     filenames = []
     BUCKET = FLAGS.image_filename
-    # FOLDER = 'images/'
-    FOLDER = 'images-testing/'
+    FOLDER = 'images/'
+    # FOLDER = 'images-testing/'
 
     s3 = boto3.client('s3')
     paginator = s3.get_paginator('list_objects_v2')
@@ -377,6 +377,7 @@ if __name__ == '__main__':
     # images isn't an exact multiple of FLAGS.batch_size then just
     # start over with the first images until the batch is filled.
     per_attempt_time=[]
+    per_attempt_throughput=[]
     for i in range(4):
         print("Attempt-",i+1)
         requests = []
@@ -396,11 +397,13 @@ if __name__ == '__main__':
             triton_client.start_stream(partial(completion_callback, user_data))
 
         per_batch_time = []
+        per_batch_throughput = []
         start_time = time.time()
 
         while not last_request:
             input_filenames = []
             repeated_image_data = []
+            batch_start_time = time.time()
 
             for idx in range(FLAGS.batch_size):
                 input_filenames.append(filenames[image_idx])
@@ -451,6 +454,8 @@ if __name__ == '__main__':
                                                 model_version=FLAGS.model_version,
                                                 outputs=outputs))
                     batch_end_time=time.time()
+                    throughput = round((batch_end_time - batch_start_time) / FLAGS.batch_size, 5)
+                    per_batch_throughput.append(throughput)
                     per_batch_time.append(round(batch_end_time-start_time, 5))
 
             except InferenceServerException as e:
@@ -480,9 +485,12 @@ if __name__ == '__main__':
                     responses.append(async_request.get_result())
 
         per_attempt_time.append(per_batch_time)
+        per_attempt_throughput.append(per_batch_throughput)
         print("PASS")
 
     import pandas as pd
 
     df = pd.DataFrame(per_attempt_time)
-    df.to_csv(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Results.csv', index=False, header=False)
+    df.to_csv(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Time.csv', index=False, header=False)
+    df1 = pd.DataFrame(per_attempt_throughput)
+    df1.to_csv(FLAGS.model_name+"_"+str(FLAGS.batch_size)+'_Throughput.csv', index=False, header=False)
