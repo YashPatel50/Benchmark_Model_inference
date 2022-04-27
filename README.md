@@ -36,9 +36,9 @@ sudo systemctl start docker
 
 **$ docker pull nvcr.io/nvidia/tritonserver:22.03-py3**
 
-sudo docker run --rm -p8000:8000 -p8001:8001 -p8002:8002 nvcr.io/nvidia/tritonserver:22.03-py3 tritonserver --model-repository=
-s3://modelsyppatel/model_repository
+sudo docker run --rm -p8000:8000 -p8001:8001 -p8002:8002 nvcr.io/nvidia/tritonserver:22.03-py3 tritonserver --model-repository=s3://modelsyppatel/model_repository
 
 Get Client Libraries
+docker pull nvcr.io/nvidia/tritonserver:22.03-py3-sdk
 docker run -it --rm --net=host nvcr.io/nvidia/tritonserver:22.03-py3-sdk
 /workspace/install/bin/image_client -m inception_graphdef -c 3 -s INCEPTION /workspace/images/mug.jpg
